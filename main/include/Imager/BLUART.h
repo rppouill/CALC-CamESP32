@@ -29,25 +29,28 @@ class BLUART : public Singleton<BLUART> {
         static void task_wrapper(void *pvParameter);
         void operator()(void* pvParameter);
 
-        SemaphoreHandle_t getSyncSemaphore();
+        //SemaphoreHandle_t getSyncSemaphore();
 
     private:
         BLUART(std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block = nullptr);
         // State Machine
-        void onData(std::vector<uint8_t>& dtmp);
+        void onData();
         void onFifoOvf();
         void onBufferFull();
         void onBreak();
         void onParityErr();
         void onFrameErr();
-        void onPatternDetect(std::vector<uint8_t>& dtmp);
+        void onPatternDetect();
 
         uint8_t parity_flag;
         uint16_t idx;
         uart_event_t event;
         QueueHandle_t uart_queue;
 
+        std::vector<uint8_t> dtmp_;
+        
+
 
         std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block_;
-        SemaphoreHandle_t syncSemaphore;
+        //SemaphoreHandle_t syncSemaphore;
 };

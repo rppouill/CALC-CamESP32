@@ -9,7 +9,7 @@ class Singleton {
 public:
     static T& getInstance() {
         if (!_instance) {
-            _instance.reset(new T()); // Construction directe avec new
+            _instance.reset(new T());  // Assumes T has a default constructor
         }
         return *_instance;
     }
@@ -24,8 +24,8 @@ public:
     void attach(const T& node) {
         nodes.push_back(node);
     }
-    void detach() { /* Implémentation */ }
-    void notify() { /* Implémentation */ }
+    void detach() { }
+    void notify() { }
 
 protected:
     Singleton() = default;

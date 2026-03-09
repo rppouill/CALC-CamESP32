@@ -15,7 +15,6 @@ class CircularBuffer{
         void push(T value){
             buffer.insert(buffer.begin(), value);
             buffer.pop_back();
-
             this->next_block();
         }
 
