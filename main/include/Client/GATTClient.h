@@ -22,7 +22,6 @@ class GATTClient {
     private: 
         // States 
         void onConnect      (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
-        void onOpen         (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         void onDisSrvcCmpl  (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         void onCfgMtu       (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         void onSearchRes    (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
@@ -33,17 +32,18 @@ class GATTClient {
         void onSrvcChg      (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         void onWriteChar    (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         //void onReadChar     (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param, uint8_t client_num);
-        void onDisconnect   (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 
-
+        struct service_info {
+            uint16_t start;
+            uint16_t end;
+        };
 
     protected:
         // Common GATT Client attributes (equivalent to a gattc_profile_inst in ESP-IDF examples)
         uint16_t gattc_if_;
         uint16_t app_id_;
         uint16_t conn_id_;
-        uint16_t service_start_handle_;
-        uint16_t service_end_handle_;
+        std::vector<service_info> services_;
         std::vector<uint16_t> char_handle_;
         std::vector<uint16_t> read_char_available_;
         std::array<uint8_t, ESP_BD_ADDR_LEN> remote_bda_;
@@ -52,19 +52,25 @@ class GATTClient {
         esp_ble_addr_type_t ble_addr_type_;
 
         std::string remote_device_name_;
-        esp_bt_uuid_t remote_filter_service_uuid_;
-        esp_bt_uuid_t remote_filter_char_uuid_;
+        std::vector<esp_bt_uuid_t> remote_filter_service_uuid_;
+        std::vector<esp_bt_uuid_t> remote_filter_char_uuid_;
         esp_bt_uuid_t notify_descr_uuid_;
         
 
 
     public:
-        GATTClient(uint16_t remote_service_uuid16, uint16_t remote_filter_char_uuid, uint16_t notify_descr_uuid);
+
+        GATTClient(std::vector<uint16_t> remote_service_uuid16, std::vector<uint16_t> remote_filter_char_uuid,  uint16_t notify_descr_uuid);
         void operator()(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
         
         virtual void onNotify    (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) = 0;
         virtual void onWriteDescr(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) = 0;
         virtual void onReadChar  (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) = 0;
+
+        void onOpen         (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
+        void onDisconnect   (esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
+        
+        uint8_t isTargetService(const esp_bt_uuid_t& uuid);
 
         // Getters 
         uint16_t        getGattcIf()            const;

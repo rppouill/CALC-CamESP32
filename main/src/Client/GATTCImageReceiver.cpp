@@ -1,7 +1,10 @@
 #include "GATTCImageReceiver.h"
 
 
-GATTCImageReceiver::GATTCImageReceiver(uint16_t remote_service_uuid16, uint16_t remote_filter_char_uuid, std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block, uint16_t notify_descr_uuid) : 
+GATTCImageReceiver::GATTCImageReceiver(std::vector<uint16_t> remote_service_uuid16, 
+                                    std::vector<uint16_t> remote_filter_char_uuid,  
+                                    std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block, 
+                                    uint16_t notify_descr_uuid) : 
     GATTClient(remote_service_uuid16, remote_filter_char_uuid, notify_descr_uuid), data_block_(data_block), parity_flag_(0) {}
 
 /*void GATTCImageReceiver::onNotify(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param){
@@ -26,9 +29,10 @@ GATTCImageReceiver::GATTCImageReceiver(uint16_t remote_service_uuid16, uint16_t 
 
 void GATTCImageReceiver::onNotify(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param){
     if(param->notify.is_notify){
-        ESP_LOGI(GATTC_CLIENT_TAG(this->app_id_), "Notification received from handle %d, value len %d", 
+        ESP_LOGI(GATTC_CLIENT_TAG(this->app_id_), "Notification received from handle %x, value len %d, %x", 
             param->notify.handle,
-            param->notify.value_len);
+            param->notify.value_len,
+            param->notify.value[0]);
         static std::vector<uint8_t> image_buffer(1024, 0);
         if(param->notify.value_len == 512 && !this->parity_flag_){
             this->parity_flag_ = !this->parity_flag_;
@@ -44,7 +48,6 @@ void GATTCImageReceiver::onNotify(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
             param->notify.value_len);
     }
 }
-
 void GATTCImageReceiver::onWriteDescr(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param){
     if(param->write.status != ESP_GATT_OK){
         ESP_LOGE(GATTC_CLIENT_TAG(this->app_id_), "Failed to write descriptor, status 0x%x", param->write.status);
@@ -52,7 +55,6 @@ void GATTCImageReceiver::onWriteDescr(esp_gattc_cb_event_t event, esp_gatt_if_t 
         // Write Something if needed
     }
 }
-
 void GATTCImageReceiver::onReadChar(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param){
     if(param->read.status != ESP_GATT_OK){
         ESP_LOGE(GATTC_CLIENT_TAG(this->app_id_), "Failed to read characteristic, status 0x%x", param->read.status);
