@@ -1,8 +1,6 @@
 idf_component_register(
     SRCS "BLE-ESPC6.cpp" 
          "src/Server/GATTSImageBroadcaster.cpp"
-         "src/Server/GATTCharacteristic.cpp"
-         "src/Server/GATTCharacteristics.cpp"
          "src/GAP.cpp"
          "src/Client/GATTClient.cpp"
          "src/Client/GATTCImageReceiver.cpp"
