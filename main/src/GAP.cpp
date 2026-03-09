@@ -1,7 +1,8 @@
 #include "GAP.h"
 
-GAP::GAP(std::string remote_device_name) : adv_config_done_(0), is_scanning_(0), is_advertising_(0) {
-    adv_params_ = {
+GAP::GAP() : is_scanning_(0), adv_controller_(AdvertisingController::getInstance()) {}
+GAP::GAP(std::string remote_device_name, esp_ble_adv_params_t adv_params) : is_scanning_(0), adv_controller_(AdvertisingController::getInstance(adv_params)) {
+    this->adv_params_ = {
         .adv_int_min        = 0x20,
         .adv_int_max        = 0x40,
         .adv_type           = ADV_TYPE_IND,
@@ -36,19 +37,14 @@ void GAP::operator()(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param
 
 void GAP::onAdvDataSetCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     ESP_LOGI(GAP_TAG, "Adv Data set");
-    adv_config_done_ &= (~(1 << 1));
-    if (this->adv_config_done_ == 0 && !this->is_advertising_){
-        this->is_advertising_ = 1;
-        esp_ble_gap_start_advertising(&adv_params_);
-    }
+    this->adv_controller_.setAdvConfigDone(this->adv_controller_.getAdvConfigDone() & (~(1 << 0 )));
+    this->adv_controller_.start_advertising();
 }
 void GAP::onScanRspDataSetCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     ESP_LOGI(GAP_TAG, "Scan Response Data set");
-    this->adv_config_done_ &= (~(1 << 1));
-    if (this->adv_config_done_ == 0 && !this->is_advertising_){
-        this->is_advertising_ = 1;
-        esp_ble_gap_start_advertising(&adv_params_);
-    }
+    this->adv_controller_.setAdvConfigDone(this->adv_controller_.getAdvConfigDone() & (~(1 << 1)));
+    this->adv_controller_.start_advertising();
+    
 }
 void GAP::onAdvStartCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     if(param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) ESP_LOGE(GAP_TAG, "Adv start failed");
@@ -57,7 +53,7 @@ void GAP::onAdvStartCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *p
 void GAP::onAdvStopCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     if (param->adv_stop_cmpl.status != ESP_BT_STATUS_SUCCESS) ESP_LOGE(GAP_TAG, "Adv stop failed");
     else ESP_LOGI(GAP_TAG, "Adv stopped successfully");
-    this->is_advertising_ = 0;
+    this->adv_controller_.isScanningFalse();
 }
 void GAP::onUpdateConnParams(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     ESP_LOGI(GAP_TAG, "Conn params update status: %d", param->update_conn_params.status);
@@ -127,14 +123,6 @@ void GAP::stopScanning(){
     this->is_scanning_ = 0;
 }
 
-void GAP::startAdvertising(){
-    if (this->adv_config_done_ == 0 && !this->is_advertising_){
-        this->is_advertising_ = 1;
-        esp_ble_gap_start_advertising(&adv_params_);
-    }
-}
-
-void GAP::stopAdvertising(){
-    esp_ble_gap_stop_advertising();
-    this->is_advertising_ = 0;
+void GAP::startAdvertising() {
+    this->adv_controller_.start_advertising();
 }
