@@ -14,17 +14,18 @@
 #include "Pattern/Singleton/Singleton.h"
 #include "Pattern/Observer/ISubject.h"
 #include "Pattern/Observer/IObserver.h"
+#include "AdvertisingController.h"
 
 
 #define GAP_TAG "GAP"
 class GAP : public Singleton<GAP>,
-            public IObserver<>, 
+            public IObserver<>,
             public ISubject<IObserver<esp_ble_gap_cb_param_t *>> {
                 
     friend class Singleton<GAP>;
     private:
-        GAP() = default;
-        GAP(std::string remote_device_name);
+        GAP();
+        GAP(std::string remote_device_name, esp_ble_adv_params_t adv_params);
 
         // Methods
         void operator()(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -40,14 +41,15 @@ class GAP : public Singleton<GAP>,
         void onSearchInqCmpl(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
         // Members
-        uint8_t adv_config_done_;
         esp_ble_adv_params_t adv_params_;
         std::string remote_device_name_;
-
         uint8_t is_scanning_;
-        uint8_t is_advertising_;
+        AdvertisingController& adv_controller_;
+        
+        
 
         std::list<IObserver<esp_ble_gap_cb_param_t *>*> observers_;
+
 
     public:
         static void gap_callback_bridge(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
@@ -56,10 +58,9 @@ class GAP : public Singleton<GAP>,
         void stopScanning();
 
         void startAdvertising();
-        void stopAdvertising();
-        // IObervable interface
-        void Update() override;
 
+        // IObserver interface
+        void Update() override;
         // ISubject interface
         void Attach(IObserver<esp_ble_gap_cb_param_t *> *observer) override;
         void Detach(IObserver<esp_ble_gap_cb_param_t *> *observer) override;

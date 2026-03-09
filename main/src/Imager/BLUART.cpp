@@ -1,7 +1,7 @@
 #include "BLUART.h"
 
 
-BLUART::BLUART(std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block) : parity_flag(true), idx(0),  data_block_(data_block), syncSemaphore(xSemaphoreCreateBinary()) {
+BLUART::BLUART(std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block) : parity_flag(true), idx(0),  data_block_(data_block)/*, syncSemaphore(xSemaphoreCreateCounting(10, 0))*/ {
     // Configure UART parameters
     uart_config_t uart_config = {
         .baud_rate = BAUDRATE,
@@ -17,27 +17,31 @@ BLUART::BLUART(std::shared_ptr<DataBlock<std::vector<uint8_t>>> data_block) : pa
     ESP_ERROR_CHECK(uart_param_config(PORT_NUM, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(PORT_NUM, TXD, RXD, RTS, CTS));
 
+    this->dtmp_.resize(BUF_SIZE, 0);
+
     uart_set_rts(PORT_NUM, 0);
 }
 
+void BLUART::task_wrapper(void *pvParameter) {
+    BLUART::getInstance().operator()(pvParameter);
+}
 
 void BLUART::operator()(void *pvParameter)
 {   
     uart_set_rts(PORT_NUM, 0);
     ESP_LOGI(BLUART_TAG, "UART event task started");
-    std::vector<uint8_t> dtmp(BUF_SIZE, 0);
     while(1){
-        if(gpio_get_level(RTS) == 0) parity_flag = true;
+        if(CTS == 0) parity_flag = true;
         if(xQueueReceive(uart_queue, (void*)&event, (TickType_t)portMAX_DELAY)){
-            std::fill(dtmp.begin(), dtmp.end(), 0);
+            std::fill(this->dtmp_.begin(), this->dtmp_.end(), 0);
             switch(event.type){
-                case UART_DATA: onData(dtmp); break;
+                case UART_DATA: onData(); break;
                 case UART_FIFO_OVF: onFifoOvf(); break;
                 case UART_BUFFER_FULL: onBufferFull(); break;
                 case UART_BREAK: onBreak(); break;
                 case UART_PARITY_ERR: onParityErr(); break;
                 case UART_FRAME_ERR: onFrameErr(); break;
-                case UART_PATTERN_DET: onPatternDetect(dtmp); break;
+                case UART_PATTERN_DET: onPatternDetect(); break;
                 default: ESP_LOGI(BLUART_TAG, "uart event type: %d", event.type);
             }
         }
@@ -45,24 +49,19 @@ void BLUART::operator()(void *pvParameter)
     }
 }
 
-
-void BLUART::task_wrapper(void *pvParameter) {
-    BLUART::getInstance().operator()(pvParameter);
-}
-
 // State Machine Handlers
 
-void BLUART::onData(std::vector<uint8_t>& dtmp) {
+void BLUART::onData() {
     static uint16_t pxl = 0x0000;
     static std::vector<uint8_t> img_buffer(BUF_SIZE, 127);
-    uart_read_bytes(PORT_NUM, dtmp.data(), event.size, portMAX_DELAY);
+    uart_read_bytes(PORT_NUM, this->dtmp_.data(), event.size, portMAX_DELAY);
     uart_set_rts(PORT_NUM, 0);
     for(auto i = 0; i < event.size; i++) {
-        /*pxl = (dtmp[i] << 8) | dtmp[i + 1];
-        //this->img_buffer_[(it - dtmp.begin()) / 2] = static_cast<uint8_t>((pxl & 0x1FFF) >> 4);
-        //this->img_buffer_->operator[]((it - dtmp.begin()) / 2) = static_cast<uint8_t>((pxl & 0x1FFF) >> 4);
+        /*pxl = (this->dtmp_[i] << 8) | this->dtmp_[i + 1];
+        //this->img_buffer_[(it - this->dtmp_.begin()) / 2] = static_cast<uint8_t>((pxl & 0x1FFF) >> 4);
+        //this->img_buffer_->operator[]((it - this->dtmp_.begin()) / 2) = static_cast<uint8_t>((pxl & 0x1FFF) >> 4);
         if(pxl & 0x2000){
-            ESP_LOGI(BLUART_TAG, "New Image detected: idx: %d, pxl: %04x, dtmp.size(): %d", idx, pxl, event.size);
+            ESP_LOGI(BLUART_TAG, "New Image detected: idx: %d, pxl: %04x, this->dtmp_.size(): %d", idx, pxl, event.size);
             this->img_buffer_->swap();
             xSemaphoreGive(this->syncSemaphore);
             idx = 0;
@@ -71,12 +70,13 @@ void BLUART::onData(std::vector<uint8_t>& dtmp) {
         idx++;*/
 
         if(parity_flag){
-            pxl = dtmp[i] << 8; parity_flag = !parity_flag;
+            pxl = this->dtmp_[i] << 8; parity_flag = !parity_flag;
         } else {
-            pxl |= dtmp[i]; parity_flag = !parity_flag;
+            pxl |= this->dtmp_[i]; parity_flag = !parity_flag;
             if(pxl & 0x2000){
                 this->data_block_->push_back(img_buffer);
-                xSemaphoreGive(this->syncSemaphore);
+                //ESP_LOGI(BLUART_TAG, "%X | %X", this->data_block_->get_read_block(), this->data_block_->get_write_block());
+                //xSemaphoreGive(this->syncSemaphore);
                 idx = 0;
             } 
             img_buffer[idx++] = static_cast<uint8_t>((pxl & 0x1FFF) >> 4);
@@ -89,11 +89,11 @@ void BLUART::onData(std::vector<uint8_t>& dtmp) {
 
 /*
 if(parity_flag){
-    pxl = dtmp[i] << 8; parity_flag = !parity_flag;
+    pxl = this->dtmp_[i] << 8; parity_flag = !parity_flag;
 } else {
-    pxl |= dtmp[i]; parity_flag = !parity_flag;
+    pxl |= this->dtmp_[i]; parity_flag = !parity_flag;
     if(pxl & 0x2000){
-        //ESP_LOGI(BLUART_TAG, "New Image detected: idx: %d, pxl: %04x, dtmp.size(): %d", idx, pxl, event.size);
+        //ESP_LOGI(BLUART_TAG, "New Image detected: idx: %d, pxl: %04x, this->dtmp_.size(): %d", idx, pxl, event.size);
         this->img_buffer_->next_block();
         xSemaphoreGive(this->syncSemaphore);
         idx = 0;
@@ -105,13 +105,16 @@ if(parity_flag){
 
 
 void BLUART::onFifoOvf() {
-    ESP_LOGW(BLUART_TAG, "FIFO overflow");
+    ESP_LOGW(BLUART_TAG, "FIFO overflow: %x", this->event.size);
     uart_set_rts(PORT_NUM, 0);
+    this->onData();
 }
 
 void BLUART::onBufferFull() {
     ESP_LOGW(BLUART_TAG, "Ringbuffer full: %x", this->event.size);
     uart_set_rts(PORT_NUM, 0);
+    this->onData();
+
 }
 
 void BLUART::onBreak() {
@@ -126,7 +129,7 @@ void BLUART::onFrameErr() {
     ESP_LOGW(BLUART_TAG, "Frame error");
 }
 
-void BLUART::onPatternDetect(std::vector<uint8_t>& dtmp) {
+void BLUART::onPatternDetect() {
     size_t buffered_size = 0;
     uart_get_buffered_data_len(PORT_NUM, &buffered_size);
     auto pos = uart_pattern_pop_pos(PORT_NUM);
@@ -134,15 +137,15 @@ void BLUART::onPatternDetect(std::vector<uint8_t>& dtmp) {
     if(pos == -1) {
         uart_flush_input(PORT_NUM);
     } else {
-        uart_read_bytes(PORT_NUM, dtmp.data(), pos, 100 / portTICK_PERIOD_MS);
+        uart_read_bytes(PORT_NUM, this->dtmp_.data(), pos, 100 / portTICK_PERIOD_MS);
         std::vector<uint8_t> pat(PORT_NUM + 1, 0);
         uart_read_bytes(PORT_NUM, pat.data(), 3, 100 / portTICK_PERIOD_MS);
-        ESP_LOGI(BLUART_TAG, "Read data: %s", dtmp.data());
+        ESP_LOGI(BLUART_TAG, "Read data: %s", this->dtmp_.data());
         ESP_LOGI(BLUART_TAG, "Read pattern: %s", pat.data());
     }
 }
 
 
-SemaphoreHandle_t BLUART::getSyncSemaphore() {
+/*SemaphoreHandle_t BLUART::getSyncSemaphore() {
     return this->syncSemaphore;
-}
+}*/
